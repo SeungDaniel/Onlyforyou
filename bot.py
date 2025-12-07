@@ -42,6 +42,11 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     # Save user existence
     storage.update_user_setting(chat_id, "username", user.username)
     
+    # Check Auth
+    if config.ALLOWED_CHAT_IDS and chat_id not in config.ALLOWED_CHAT_IDS:
+        await update.message.reply_text("죄송합니다. 허용된 사용자만 이용할 수 있습니다. 🚫")
+        return
+    
     # Persistent Menu (ReplyKeyboardMarkup)
     reply_markup = ReplyKeyboardMarkup(MAIN_MENU_KEYBOARD, resize_keyboard=True, is_persistent=True)
     
@@ -56,6 +61,14 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
 
 async def guide(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """Sends the guide message."""
+    # Check Auth
+    if config.ALLOWED_CHAT_IDS and update.effective_chat.id not in config.ALLOWED_CHAT_IDS:
+        if update.callback_query:
+            await update.callback_query.answer("권한이 없습니다.", show_alert=True)
+        else:
+            await update.message.reply_text("죄송합니다. 허용된 사용자만 이용할 수 있습니다. 🚫")
+        return
+
     # Handle both command and callback query
     if update.message:
         await update.message.reply_text(
@@ -78,6 +91,14 @@ async def guide(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
 
 async def music_menu(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """Sends the music mood menu."""
+    # Check Auth
+    if config.ALLOWED_CHAT_IDS and update.effective_chat.id not in config.ALLOWED_CHAT_IDS:
+        if update.callback_query:
+            await update.callback_query.answer("권한이 없습니다.", show_alert=True)
+        else:
+            await update.message.reply_text("죄송합니다. 허용된 사용자만 이용할 수 있습니다. 🚫")
+        return
+
     keyboard = [
         [InlineKeyboardButton("☀️ 기분 좋아~", callback_data="music_good")],
         [InlineKeyboardButton("☁️ 우울해ㅠ", callback_data="music_depressed")],
@@ -93,6 +114,10 @@ async def music_menu(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None
 
 async def setup_start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     """Starts the setup conversation."""
+    if config.ALLOWED_CHAT_IDS and update.effective_chat.id not in config.ALLOWED_CHAT_IDS:
+        await update.message.reply_text("죄송합니다. 허용된 사용자만 이용할 수 있습니다. 🚫")
+        return ConversationHandler.END
+
     reply_keyboard = [
         ["기상 (비피더스)", "오전 (홍삼)"],
         ["점심 (아해티&비타민)", "저녁 (운동)"],
@@ -169,6 +194,10 @@ async def cancel(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
 
 async def test_menu(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """Sends a menu to test specific reminders immediately."""
+    if config.ALLOWED_CHAT_IDS and update.effective_chat.id not in config.ALLOWED_CHAT_IDS:
+        await update.message.reply_text("죄송합니다. 허용된 사용자만 이용할 수 있습니다. 🚫")
+        return
+
     keyboard = [
         [InlineKeyboardButton("🔔 기상 알림 테스트", callback_data="test_wakeup")],
         [InlineKeyboardButton("🔔 오전 알림 테스트", callback_data="test_morning")],
@@ -182,6 +211,11 @@ async def test_menu(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
 async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """Parses the CallbackQuery and updates the message text."""
     query = update.callback_query
+    
+    if config.ALLOWED_CHAT_IDS and update.effective_chat.id not in config.ALLOWED_CHAT_IDS:
+        await query.answer("권한이 없습니다.", show_alert=True)
+        return
+
     await query.answer()
 
     # Main Menu Handlers
@@ -276,6 +310,10 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
 
 async def handle_photo(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """Saves user photos to the user_photos directory."""
+    if config.ALLOWED_CHAT_IDS and update.effective_chat.id not in config.ALLOWED_CHAT_IDS:
+        await update.message.reply_text("죄송합니다. 허용된 사용자만 이용할 수 있습니다. 🚫")
+        return
+
     import os
     from datetime import datetime
     
@@ -296,6 +334,11 @@ async def handle_photo(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
 async def review_start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     """Starts the daily review process (triggered by button)."""
     query = update.callback_query
+    
+    if config.ALLOWED_CHAT_IDS and update.effective_chat.id not in config.ALLOWED_CHAT_IDS:
+        await query.answer("권한이 없습니다.", show_alert=True)
+        return ConversationHandler.END
+
     await query.answer()
     
     rating = int(query.data.split("_")[1])
