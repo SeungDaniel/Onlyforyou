@@ -121,3 +121,27 @@ kill -9 [PID]
 > **주의**: 서버에 다른 파이썬 프로그램이 돌고 있다면 `ps aux | grep main.py`는 위험할 수 있습니다. 꼭 `miin-bot` 폴더인지 확인하고 종료하세요!
 
 > **참고**: 24시간 안정적으로 운영하려면 `deployment_guide.md`의 **Systemd** 방식을 추천합니다. (서버 재부팅 시 자동 실행됨)
+
+## 5. 배포 업데이트 (Git Pull)
+
+코드를 수정해서 GitHub에 올린 후, 서버에 반영하는 방법입니다.
+
+1. **프로젝트 폴더로 이동**
+   ```bash
+   cd ~/miin-bot  # 또는 설치된 경로
+   ```
+
+2. **최신 코드 내려받기**
+   ```bash
+   git pull origin main
+   ```
+
+3. **봇 재시작** (기존 프로세스 종료 후 다시 실행)
+   ```bash
+   # 프로세스 종료
+   pkill -f "python3 main.py"
+
+   # 다시 실행 (nohup)
+   nohup python3 main.py > output.log 2>&1 &
+   ```
+   > **Note**: `pkill`은 "python3 main.py"가 포함된 모든 프로세스를 종료합니다. 이 서버에서 이 봇만 실행 중이라면 가장 간편한 방법입니다.
