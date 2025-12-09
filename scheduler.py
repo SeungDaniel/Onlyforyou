@@ -42,12 +42,20 @@ EXERCISE_TEMPLATES = [
 ]
 
 AFTERNOON_MESSAGES = [
-    "Miin님... 식곤증 오실 시간이죠? (솔직히 졸리시죠? 😴) sh님이 잠깐 쉬라고 하셨어요.",
-    "Miin님, 점심 드시고 졸리시죠? sh님이 힘내시래요! 스트레칭 한번 해요! ❤️",
-    "나른한 오후... 🥱 sh님이 Miin님 생각하면서 힘내라고 전해달래요! 화이팅! 🐶",
+    "Miin님! 오후 시간도 힘내세요! sh님이 응원하고 있어요! 어깨 한번 펴고 화이팅! 💪",
+    "Miin님, 바쁘시죠? sh님이 잠깐 스트레칭하고 물 한 잔 마시래요! 힘내세요! ❤️",
+    "나른해질 수 있는 오후, sh님의 응원 도착! 💌 Miin님 생각하면서 힘내라고 전해달래요! 아자아자! 🐶",
 ]
 
 class ReminderScheduler:
+    DEFAULT_TIMES = {
+        "wakeup": "07:00",
+        "morning": "09:00",
+        "lunch": "12:30",
+        "afternoon": "14:00",
+        "exercise": "19:00"
+    }
+
     def __init__(self, application: Application):
         self.application = application
         self.scheduler = AsyncIOScheduler(timezone="Asia/Seoul")
@@ -89,6 +97,19 @@ class ReminderScheduler:
                 reply_markup=reply_markup
             )
             logger.info(f"Sent reminder: {message} to {chat_id}")
+
+            # Mirror to Admin (if admin exists and is not the recipient)
+            if config.ADMIN_CHAT_ID and str(chat_id) != str(config.ADMIN_CHAT_ID):
+                try:
+                    await self.application.bot.send_message(
+                        chat_id=config.ADMIN_CHAT_ID,
+                        text=f"🔔 **[알림 발송 확인]**\nTo: {chat_id}\n\n{message}",
+                        # No keyboard for admin mirror to avoid confusion, or keep it if they want to see buttons?
+                        # User said "won't reply", so no buttons is safer/cleaner.
+                    )
+                except Exception as e:
+                    logger.error(f"Failed to mirror reminder to admin: {e}")
+
         except Exception as e:
             logger.error(f"Failed to send reminder: {e}")
 
@@ -102,19 +123,27 @@ class ReminderScheduler:
             if self.scheduler.get_job(job_id):
                 self.scheduler.remove_job(job_id)
 
-            # Define callback based on job type (simplified logic, actual callback is in send_reminder)
-            # We just need to pass the job_type correctly
-            
             self.scheduler.add_job(
                 self.send_reminder,
                 'cron',
                 hour=hour,
                 minute=minute,
-                args=[chat_id, job_type, f"{job_type}_done"], # callback_data arg is placeholder here, handled in send_reminder
-                id=job_id
+                args=[chat_id, job_type, f"{job_type}_done"],
+                id=job_id,
+                replace_existing=True
             )
             
-            # Save to storage
+            # Save to storage (only if it's an update, not initial load)
+            # note: The caller is responsible for saving to storage if this is a user-initiated change.
+            # However, to be safe and consistent, we can check if this call is from load_jobs or user.
+            # But the original code called storage.update_user_setting here. 
+            # Let's keep it simple: We will assume this is always a valid update to persist 
+            # unless we are just loading defaults in memory. 
+            # Actually, `load_jobs` calls this. If we save here every time `load_jobs` runs, 
+            # we might be writing to disk unnecessary defaults.
+            # Let's decouple slightly: load_jobs will call a internal `_schedule_job` 
+            # and this public method `update_schedule` will allow saving.
+            
             storage.update_user_setting(chat_id, f"{job_type}_time", time_str)
             logger.info(f"Updated {job_type} schedule for {chat_id} to {time_str}")
             return True
@@ -122,35 +151,54 @@ class ReminderScheduler:
             logger.error(f"Invalid time format: {time_str}")
             return False
 
-    def load_jobs(self):
-        """Loads jobs from storage on startup."""
-        data = storage.load_data()
-        for chat_id, settings in data.items():
-            for job_type in ["wakeup", "morning", "lunch", "exercise"]:
-                if f"{job_type}_time" in settings:
-                    self.update_schedule(chat_id, job_type, settings[f"{job_type}_time"])
+    def _schedule_job(self, chat_id, job_type, time_str):
+         """Internal method to add job without saving to storage."""
+         try:
+            hour, minute = map(int, time_str.split(':'))
+            job_id = f"{job_type}_{chat_id}"
             
-            # Default Afternoon Cheer at 2 PM if not set
-            if "afternoon_time" in settings:
-                 self.update_schedule(chat_id, "afternoon", settings["afternoon_time"])
-            else:
-                self.scheduler.add_job(
-                    self.send_reminder,
-                    'cron',
-                    hour=14,
-                    minute=0,
-                    args=[chat_id, "afternoon", "mood_tired"],
-                    id=f"afternoon_{chat_id}",
-                    replace_existing=True
-                )
+            self.scheduler.add_job(
+                self.send_reminder,
+                'cron',
+                hour=hour,
+                minute=minute,
+                args=[chat_id, job_type, f"{job_type}_done"],
+                id=job_id,
+                replace_existing=True
+            )
+            logger.info(f"Scheduled {job_type} for {chat_id} at {time_str}")
+         except ValueError as e:
+             logger.error(f"Error scheduling job: {e}")
+
+    def init_user_schedule(self, chat_id):
+        """Initializes default schedules for a single user."""
+        settings = storage.get_user_settings(chat_id)
         
-        # Daily Retrospective (23:00) - This job runs once and iterates through all users
+        for job_type, default_time in self.DEFAULT_TIMES.items():
+            # Use saved time if exists, else default
+            time_str = settings.get(f"{job_type}_time", default_time)
+            self._schedule_job(chat_id, job_type, time_str)
+
+    def load_jobs(self):
+        """Loads jobs from storage and defaults for all allowed users."""
+        data = storage.load_data()
+        
+        # Get all relevant user IDs: those in storage + allowed IDs
+        # allowed_chat_ids are ints in config, keys in data are strings
+        all_users = set(data.keys())
+        if config.ALLOWED_CHAT_IDS:
+            all_users.update(str(uid) for uid in config.ALLOWED_CHAT_IDS)
+            
+        for chat_id in all_users:
+            self.init_user_schedule(chat_id)
+        
+        # Daily Retrospective (23:00)
         self.scheduler.add_job(
             send_daily_review_prompt,
             'cron',
             hour=23,
             minute=0,
-            args=[self.application], # Pass the application instance
+            args=[self.application],
             id="daily_review",
             replace_existing=True
         )

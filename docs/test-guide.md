@@ -77,3 +77,47 @@ pip install -r requirements.txt
 # 4. 봇 실행
 python main.py
 ```
+
+## 4. 서버 백그라운드 실행 및 관리 (nohup 방식)
+
+서버에서 터미널을 꺼도 봇이 계속 실행되게 하려면 `nohup`을 사용하면 간단합니다.
+
+### A. 백그라운드 실행 (`nohup`)
+
+터미널 연결을 끊어도 봇이 죽지 않도록 실행하는 명령어입니다.
+
+```bash
+# 1. 봇 실행 (로그를 output.log에 저장)
+nohup python3 main.py > output.log 2>&1 &
+
+# 2. 잘 실행됐는지 확인
+ps aux | grep main.py
+```
+
+### B. 로그 실시간 확인
+
+실행 중인 봇의 상태를 확인하려면 로그를 봅니다.
+
+```bash
+# 실시간 로그 보기 (종료하려면 Ctrl + C)
+tail -f output.log
+```
+
+### C. 봇 중단 (재시작 시 필수)
+
+코드를 수정했거나 봇을 끄고 싶을 때는 프로세스를 찾아서 종료해야 합니다.
+
+```bash
+# 1. 프로세스 ID (PID) 찾기 (주의: 다른 프로젝트의 main.py와 헷갈리지 않게 폴더명도 같이 확인!)
+ps aux | grep "miin-bot"
+# 또는
+ps aux | grep "python3 main.py"
+# (출력에서 ./venv/bin/python main.py 처럼 경로를 꼭 확인하세요!)
+
+# 2. 프로세스 종료 (강제 종료)
+kill -9 [PID]
+```
+
+> **주의**: 서버에 다른 파이썬 프로그램이 돌고 있다면 `ps aux | grep main.py`는 위험할 수 있습니다. 꼭 `miin-bot` 폴더인지 확인하고 종료하세요!
+
+> **참고**: 24시간 안정적으로 운영하려면 `deployment_guide.md`의 **Systemd** 방식을 추천합니다. (서버 재부팅 시 자동 실행됨)

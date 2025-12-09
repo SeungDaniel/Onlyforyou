@@ -50,6 +50,11 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     # Persistent Menu (ReplyKeyboardMarkup)
     reply_markup = ReplyKeyboardMarkup(MAIN_MENU_KEYBOARD, resize_keyboard=True, is_persistent=True)
     
+    # Initialize Schedule for new user immediately
+    scheduler = context.bot_data.get('scheduler')
+    if scheduler:
+        scheduler.init_user_schedule(chat_id)
+    
     await update.message.reply_html(
         rf"안녕하세요 {user.mention_html()}님! "
         "sh님이 보내신 건강 관리 서비스입니다! 🐶🤖\n\n"
@@ -377,6 +382,32 @@ async def review_text(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int
         
     return ConversationHandler.END
 
+async def handle_unknown_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Handles any unknown messages by logging them."""
+    if config.ALLOWED_CHAT_IDS and update.effective_chat.id not in config.ALLOWED_CHAT_IDS:
+        await update.message.reply_text("죄송합니다. 허용된 사용자만 이용할 수 있습니다. 🚫")
+        return
+
+    text = update.message.text
+    chat_id = update.effective_chat.id
+    
+    # Log to storage
+    storage.log_user_message(chat_id, text)
+    
+    # Reply to user
+    await update.message.reply_text("메시지를 남겨주셔서 감사합니다! 📝\n(sh님께도 전해드릴게요!)")
+    
+    # Notify Admin
+    if config.ADMIN_CHAT_ID:
+        try:
+            await context.bot.send_message(
+                chat_id=config.ADMIN_CHAT_ID,
+                text=f"📨 **[새 메시지 도착]**\nFrom: {update.effective_user.mention_html()}\n\n{text}",
+                parse_mode='HTML'
+            )
+        except Exception as e:
+            logger.error(f"Failed to notify admin: {e}")
+
 def create_application() -> Application:
     """Start the bot."""
     if not config.TELEGRAM_TOKEN:
@@ -419,5 +450,8 @@ def create_application() -> Application:
     application.add_handler(MessageHandler(filters.PHOTO, handle_photo))
     
     application.add_handler(CallbackQueryHandler(button_handler))
+    
+    # Catch-all text handler (Must be last)
+    application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_unknown_message))
 
     return application

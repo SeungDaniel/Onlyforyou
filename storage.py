@@ -80,3 +80,23 @@ def log_daily_review(chat_id, rating, text):
     }
     data[chat_id_str]["daily_reviews"].append(entry)
     save_data(data)
+
+def log_user_message(chat_id, message_text):
+    """Logs a general message from the user."""
+    from datetime import datetime
+    
+    data = load_data()
+    chat_id_str = str(chat_id)
+    
+    if chat_id_str not in data:
+        data[chat_id_str] = {}
+        
+    if "message_history" not in data[chat_id_str]:
+        data[chat_id_str]["message_history"] = []
+        
+    entry = {
+        "date": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+        "message": message_text
+    }
+    data[chat_id_str]["message_history"].append(entry)
+    save_data(data)
